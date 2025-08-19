@@ -81,7 +81,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd wikijs
-          npm install --no-audit --no-fund
+          npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: Set Database ENV
         run: |
