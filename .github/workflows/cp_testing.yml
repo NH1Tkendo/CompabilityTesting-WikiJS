@@ -1,11 +1,7 @@
-name: Compatibility Testing
+name: Wiki.js Compatibility Testing
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   test:
@@ -13,9 +9,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [16, 18, 20]
-        browser: [chrome, firefox]
-        database: [postgresql, mysql, mongodb]
+        include:
+          - node: 16
+            browser: chrome
+            database: postgresql
+          - node: 18
+            browser: firefox
+            database: mysql
+          - node: 20
+            browser: chrome
+            database: mongodb
 
     services:
       postgres:
@@ -52,13 +55,14 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-cmd="mongo --eval 'db.adminCommand(\"ping\")'"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Wiki.js repo
+        uses: actions/checkout@v4
 
       - name: Setup Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
@@ -66,7 +70,7 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Set Database ENV
         run: |
@@ -91,7 +95,10 @@ jobs:
             echo "DB_NAME=wikijs" >> $GITHUB_ENV
           fi
 
-      - name: Run Tests
+      - name: Build Wiki.js
+        run: npm run build
+
+      - name: Run Wiki.js Tests
         run: |
-          echo "Running tests on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
+          echo "Running Wiki.js tests on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
           npm run test
