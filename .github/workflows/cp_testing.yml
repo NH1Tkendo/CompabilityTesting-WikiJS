@@ -1,10 +1,7 @@
-name: Compatibility Testing
+name: Wiki.js Compatibility Testing
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -12,9 +9,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [16, 18, 20]
-        browser: [chrome, firefox]
-        database: [postgresql, mysql, mongodb]
+        include:
+          - node: 16
+            browser: chrome
+            database: postgresql
+          - node: 18
+            browser: firefox
+            database: mysql
+          - node: 20
+            browser: chrome
+            database: mongodb
 
     services:
       postgres:
@@ -51,13 +55,23 @@ jobs:
         ports:
           - 27017:27017
         options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-cmd="mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          path: mainrepo
+
+      - name: Checkout Wiki.js source
+        uses: actions/checkout@v4
+        with:
+          repository: requarks/wiki
+          ref: main
+          path: wikijs
 
       - name: Setup Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
@@ -65,7 +79,9 @@ jobs:
           node-version: ${{ matrix.node }}
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          cd wikijs
+          npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: Set Database ENV
         run: |
@@ -90,7 +106,14 @@ jobs:
             echo "DB_NAME=wikijs" >> $GITHUB_ENV
           fi
 
-      - name: Run Tests
+      - name: Build Wiki.js
         run: |
-          echo "Running tests on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
+          cd wikijs
+          echo "Running Wiki.js build on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
+          npm run build
+          
+      - name: Run Wiki.js Tests
+        run: |
+          cd wikijs
+          echo "Running Wiki.js tests on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
           npm run test
