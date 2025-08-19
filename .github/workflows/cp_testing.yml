@@ -71,6 +71,7 @@ jobs:
           wget https://github.com/Requarks/wiki/releases/latest/download/wiki-js.tar.gz
           mkdir wikijs
           tar xzf wiki-js.tar.gz -C ./wikijs
+          cd wikijs
           mv config.sample.yml config.yml
 
       - name: Setup Node.js ${{ matrix.node }}
