@@ -10,7 +10,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - node: 16
+          - node: 14
             browser: chrome
             database: postgresql
           - node: 18
