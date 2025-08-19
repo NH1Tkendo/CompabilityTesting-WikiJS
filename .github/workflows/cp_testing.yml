@@ -81,7 +81,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd wikijs
-          npm install --no-audit --no-fund --legacy-peer-deps
+          yarn install --frozen-lockfile --ignore-engines
 
       - name: Set Database ENV
         run: |
@@ -110,10 +110,10 @@ jobs:
         run: |
           cd wikijs
           echo "Running Wiki.js build on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
-          npm run build
+          yarn build
           
       - name: Run Wiki.js Tests
         run: |
           cd wikijs
           echo "Running Wiki.js tests on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
-          npm run test
+          yarn test
