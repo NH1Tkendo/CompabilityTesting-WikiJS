@@ -1,7 +1,7 @@
 name: Wiki.js Compatibility Testing
 
 on:
-  workflow_dispatch:   # chạy thủ công bằng nút Run workflow
+  workflow_dispatch:
 
 jobs:
   test:
@@ -64,13 +64,22 @@ jobs:
       - name: Checkout Wiki.js repo
         uses: actions/checkout@v4
 
+      - name: Checkout Wiki.js source
+        uses: actions/checkout@v4
+        with:
+          repository: requarks/wiki
+          ref: master
+          path: wikijs
+
       - name: Setup Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          cd wikijs
+          npm install --no-audit --no-fund
 
       - name: Set Database ENV
         run: |
@@ -96,9 +105,13 @@ jobs:
           fi
 
       - name: Build Wiki.js
-        run: npm run build
-
+        run: |
+          cd wikijs
+          echo "Running Wiki.js build on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
+          npm run build
+          
       - name: Run Wiki.js Tests
         run: |
+          cd wikijs
           echo "Running Wiki.js tests on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
           npm run test
