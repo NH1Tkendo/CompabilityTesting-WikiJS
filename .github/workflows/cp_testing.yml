@@ -70,7 +70,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: requarks/wiki
-          ref: master
+          ref: main
           path: wikijs
 
       - name: Setup Node.js ${{ matrix.node }}
