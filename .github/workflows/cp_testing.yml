@@ -1,7 +1,7 @@
 name: Wiki.js Compatibility Testing
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # chạy thủ công bằng nút Run workflow
 
 jobs:
   test:
@@ -28,7 +28,7 @@ jobs:
           POSTGRES_PASSWORD: wikijs
           POSTGRES_DB: wikijs
         ports:
-          - 5432:5432
+          - 5432/tcp
         options: >-
           --health-cmd="pg_isready -U wikijs"
           --health-interval=10s
@@ -43,7 +43,7 @@ jobs:
           MYSQL_USER: wikijs
           MYSQL_PASSWORD: wikijs
         ports:
-          - 3306:3306
+          - 3306/tcp
         options: >-
           --health-cmd="mysqladmin ping -h localhost -u wikijs --password=wikijs"
           --health-interval=10s
@@ -53,9 +53,9 @@ jobs:
       mongo:
         image: mongo:6
         ports:
-          - 27017:27017
+          - 27017/tcp
         options: >-
-          --health-cmd="mongo --eval 'db.adminCommand(\"ping\")'"
+          --health-cmd="mongosh --eval 'db.adminCommand(\"ping\")' || exit 1"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -77,21 +77,21 @@ jobs:
           if [ "${{ matrix.database }}" = "postgresql" ]; then
             echo "DB_TYPE=postgres" >> $GITHUB_ENV
             echo "DB_HOST=localhost" >> $GITHUB_ENV
-            echo "DB_PORT=5432" >> $GITHUB_ENV
+            echo "DB_PORT=${{ job.services.postgres.ports[5432] }}" >> $GITHUB_ENV
             echo "DB_USER=wikijs" >> $GITHUB_ENV
             echo "DB_PASS=wikijs" >> $GITHUB_ENV
             echo "DB_NAME=wikijs" >> $GITHUB_ENV
           elif [ "${{ matrix.database }}" = "mysql" ]; then
             echo "DB_TYPE=mysql" >> $GITHUB_ENV
             echo "DB_HOST=localhost" >> $GITHUB_ENV
-            echo "DB_PORT=3306" >> $GITHUB_ENV
+            echo "DB_PORT=${{ job.services.mysql.ports[3306] }}" >> $GITHUB_ENV
             echo "DB_USER=wikijs" >> $GITHUB_ENV
             echo "DB_PASS=wikijs" >> $GITHUB_ENV
             echo "DB_NAME=wikijs" >> $GITHUB_ENV
           elif [ "${{ matrix.database }}" = "mongodb" ]; then
             echo "DB_TYPE=mongodb" >> $GITHUB_ENV
             echo "DB_HOST=localhost" >> $GITHUB_ENV
-            echo "DB_PORT=27017" >> $GITHUB_ENV
+            echo "DB_PORT=${{ job.services.mongo.ports[27017] }}" >> $GITHUB_ENV
             echo "DB_NAME=wikijs" >> $GITHUB_ENV
           fi
 
