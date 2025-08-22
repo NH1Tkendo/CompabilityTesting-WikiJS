@@ -120,7 +120,7 @@ jobs:
           curl -I http://localhost:3000 || (cat server.log && exit 1)
 
   # --- Job chạy Safari riêng trên macOS ---
-    test-safari:
+  test-safari:
     runs-on: macos-latest
     strategy:
       fail-fast: false
