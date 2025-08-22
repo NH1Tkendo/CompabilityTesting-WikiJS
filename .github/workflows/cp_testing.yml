@@ -119,7 +119,7 @@ jobs:
           cd wikijs
           curl -I http://localhost:3000 || (cat server.log && exit 1)
 
-  # --- Job chạy Safari riêng trên macOS ---
+   # --- Job chạy Safari riêng trên macOS ---
   test-safari:
     runs-on: macos-latest
     strategy:
@@ -148,40 +148,48 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      # --- Cài DB theo matrix ---
+      # --- Cài và khởi động Database ---
       - name: Setup Database
         run: |
           if [ "${{ matrix.database }}" = "postgresql" ]; then
             brew install postgresql@15
             brew services start postgresql@15
-            sleep 10
-            createdb wiki
-            psql -d postgres -c "CREATE USER wikijs WITH PASSWORD 'wikijsrocks';"
-            psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
+            sleep 15
+            # tạo DB và user
+            initdb --locale=C -D /usr/local/var/postgres || true
+            pg_ctl -D /usr/local/var/postgres start || true
+            createdb wiki || true
+            psql -d postgres -c "CREATE USER wikijs WITH PASSWORD 'wikijsrocks';" || true
+            psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;" || true
+
             echo "DB_TYPE=postgres" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
             echo "DB_PORT=5432" >> $GITHUB_ENV
             echo "DB_USER=wikijs" >> $GITHUB_ENV
             echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
             echo "DB_NAME=wiki" >> $GITHUB_ENV
+
           elif [ "${{ matrix.database }}" = "mysql" ]; then
             brew install mysql
             brew services start mysql
-            sleep 10
-            mysql -uroot -e "CREATE DATABASE wiki;"
-            mysql -uroot -e "CREATE USER 'wikijs'@'localhost' IDENTIFIED BY 'wikijsrocks';"
+            sleep 15
+            mysql -uroot -e "CREATE DATABASE IF NOT EXISTS wiki;"
+            mysql -uroot -e "CREATE USER IF NOT EXISTS 'wikijs'@'localhost' IDENTIFIED BY 'wikijsrocks';"
             mysql -uroot -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
+
             echo "DB_TYPE=mysql" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
             echo "DB_PORT=3306" >> $GITHUB_ENV
             echo "DB_USER=wikijs" >> $GITHUB_ENV
             echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
             echo "DB_NAME=wiki" >> $GITHUB_ENV
+
           elif [ "${{ matrix.database }}" = "mongodb" ]; then
             brew tap mongodb/brew
             brew install mongodb-community@6.0
             brew services start mongodb-community@6.0
-            sleep 10
+            sleep 15
+
             echo "DB_TYPE=mongodb" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
             echo "DB_PORT=27017" >> $GITHUB_ENV
@@ -210,4 +218,5 @@ jobs:
         run: |
           cd wikijs
           curl -I http://localhost:3000 || (cat server.log && exit 1)
+
 
