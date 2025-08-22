@@ -35,43 +35,20 @@ jobs:
       # --- Cài và khởi động Database ---
       - name: Setup Database
         run: |
-          if [ "${{ matrix.database }}" = "postgresql" ]; then
-            brew install postgresql@15
-            # add vào PATH
-            echo 'export PATH="/usr/local/opt/postgresql@15/bin:$PATH"' >> $HOME/.bash_profile
-            export PATH="/usr/local/opt/postgresql@15/bin:$PATH"
-            brew services start postgresql@15
-            sleep 15
-
-            # tạo user + db
-            psql -d postgres -c "DROP DATABASE IF EXISTS wiki;" || true
-            psql -d postgres -c "DROP USER IF EXISTS wikijs;" || true
-            psql -d postgres -c "CREATE USER wikijs WITH PASSWORD 'wikijsrocks';"
-            psql -d postgres -c "CREATE DATABASE wiki OWNER wikijs;"
-
-            echo "DB_TYPE=postgres" >> $GITHUB_ENV
-            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
-            echo "DB_PORT=5432" >> $GITHUB_ENV
-            echo "DB_USER=wikijs" >> $GITHUB_ENV
-            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
-            echo "DB_NAME=wiki" >> $GITHUB_ENV
-
-          elif [ "${{ matrix.database }}" = "mysql" ]; then
+          if [ "${{ matrix.database }}" = "mysql" ]; then
             brew install mysql
-            # add vào PATH
             echo 'export PATH="/usr/local/opt/mysql/bin:$PATH"' >> $HOME/.bash_profile
             export PATH="/usr/local/opt/mysql/bin:$PATH"
             brew services start mysql
             sleep 15
 
-            # reset root password & tạo user wikijs
-            mysql -uroot -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'rootpass';" || true
-            mysql -uroot -prootpass -e "DROP DATABASE IF EXISTS wiki;"
-            mysql -uroot -prootpass -e "CREATE DATABASE wiki;"
-            mysql -uroot -prootpass -e "DROP USER IF EXISTS 'wikijs'@'localhost';"
-            mysql -uroot -prootpass -e "CREATE USER 'wikijs'@'localhost' IDENTIFIED BY 'wikijsrocks';"
-            mysql -uroot -prootpass -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
-            mysql -uroot -prootpass -e "FLUSH PRIVILEGES;"
+            # root mặc định không có password nên kết nối không cần -p
+            mysql -uroot -e "DROP DATABASE IF EXISTS wiki;"
+            mysql -uroot -e "CREATE DATABASE wiki;"
+            mysql -uroot -e "DROP USER IF EXISTS 'wikijs'@'localhost';"
+            mysql -uroot -e "CREATE USER 'wikijs'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'wikijsrocks';"
+            mysql -uroot -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
+            mysql -uroot -e "FLUSH PRIVILEGES;"
 
             echo "DB_TYPE=mysql" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
@@ -79,18 +56,8 @@ jobs:
             echo "DB_USER=wikijs" >> $GITHUB_ENV
             echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
             echo "DB_NAME=wiki" >> $GITHUB_ENV
-
-          elif [ "${{ matrix.database }}" = "mongodb" ]; then
-            brew tap mongodb/brew
-            brew install mongodb-community@6.0
-            brew services start mongodb-community@6.0
-            sleep 15
-
-            echo "DB_TYPE=mongodb" >> $GITHUB_ENV
-            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
-            echo "DB_PORT=27017" >> $GITHUB_ENV
-            echo "DB_NAME=wiki" >> $GITHUB_ENV
           fi
+
 
 
 
