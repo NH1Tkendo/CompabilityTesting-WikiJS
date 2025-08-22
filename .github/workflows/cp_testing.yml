@@ -4,21 +4,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  # --- Job chạy trên Ubuntu (Chrome + Firefox) ---
   test:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - node: 14
-            browser: chrome
-            database: postgresql
-          - node: 18
-            browser: firefox
-            database: mysql
-          - node: 20
-            browser: chrome
-            database: mongodb
+        node: [14, 18, 20]
+        database: [postgresql, mysql, mongodb]
+        browser: [chrome, firefox]
 
     services:
       postgres:
@@ -45,7 +39,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h localhost -u wikijs --password=wikijs"
+          --health-cmd="mysqladmin ping -h localhost -u wikijs --password=wikijsrocks"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -91,26 +85,104 @@ jobs:
             echo "DB_HOST=localhost" >> $GITHUB_ENV
             echo "DB_PORT=5432" >> $GITHUB_ENV
             echo "DB_USER=wikijs" >> $GITHUB_ENV
-            echo "DB_PASS=wikijs" >> $GITHUB_ENV
-            echo "DB_NAME=wikijs" >> $GITHUB_ENV
+            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
           elif [ "${{ matrix.database }}" = "mysql" ]; then
             echo "DB_TYPE=mysql" >> $GITHUB_ENV
             echo "DB_HOST=localhost" >> $GITHUB_ENV
             echo "DB_PORT=3306" >> $GITHUB_ENV
             echo "DB_USER=wikijs" >> $GITHUB_ENV
-            echo "DB_PASS=wikijs" >> $GITHUB_ENV
-            echo "DB_NAME=wikijs" >> $GITHUB_ENV
+            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
           elif [ "${{ matrix.database }}" = "mongodb" ]; then
             echo "DB_TYPE=mongodb" >> $GITHUB_ENV
             echo "DB_HOST=localhost" >> $GITHUB_ENV
             echo "DB_PORT=27017" >> $GITHUB_ENV
-            echo "DB_NAME=wikijs" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
           fi
 
       - name: Build Wiki.js
         run: |
           cd wikijs
           echo "Running Wiki.js build on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser ${{ matrix.browser }}"
+          npm rebuild sqlite3
+          
+      - name: Start Wiki.js server
+        run: |
+          cd wikijs
+          nohup node server > server.log 2>&1 &
+          sleep 20
+          cat server.log
+
+      - name: Test server response
+        run: |
+          cd wikijs
+          curl -I http://localhost:3000 || (cat server.log && exit 1)
+
+  # --- Job chạy Safari riêng trên macOS ---
+  test-safari:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [14, 18, 20]
+        database: [postgresql, mysql, mongodb]
+        browser: [safari]
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          path: mainrepo
+
+      - name: Checkout Wiki.js source
+        run: |
+          wget https://github.com/Requarks/wiki/releases/latest/download/wiki-js.tar.gz
+          mkdir wikijs
+          tar xzf wiki-js.tar.gz -C ./wikijs
+          cd wikijs
+          mv config.sample.yml config.yml
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install dependencies
+        run: |
+          cd wikijs
+          npm install --no-audit --no-fund --legacy-peer-deps
+
+      - name: Set Database ENV
+        run: |
+          # Trên macOS không có service container, 
+          # cần setup DB khác (VD: brew install hoặc remote DB)
+          # Ở đây chỉ set ENV giả định để minh họa
+          if [ "${{ matrix.database }}" = "postgresql" ]; then
+            echo "DB_TYPE=postgres" >> $GITHUB_ENV
+            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+            echo "DB_PORT=5432" >> $GITHUB_ENV
+            echo "DB_USER=wikijs" >> $GITHUB_ENV
+            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
+          elif [ "${{ matrix.database }}" = "mysql" ]; then
+            echo "DB_TYPE=mysql" >> $GITHUB_ENV
+            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+            echo "DB_PORT=3306" >> $GITHUB_ENV
+            echo "DB_USER=wikijs" >> $GITHUB_ENV
+            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
+          elif [ "${{ matrix.database }}" = "mongodb" ]; then
+            echo "DB_TYPE=mongodb" >> $GITHUB_ENV
+            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+            echo "DB_PORT=27017" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
+          fi
+
+      - name: Build Wiki.js
+        run: |
+          cd wikijs
+          echo "Running Wiki.js build on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser Safari"
           npm rebuild sqlite3
           
       - name: Start Wiki.js server
