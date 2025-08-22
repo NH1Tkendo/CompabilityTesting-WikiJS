@@ -120,7 +120,7 @@ jobs:
           curl -I http://localhost:3000 || (cat server.log && exit 1)
 
   # --- Job chạy Safari riêng trên macOS ---
-  test-safari:
+    test-safari:
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -148,17 +148,16 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      - name: Install dependencies
+      # --- Cài DB theo matrix ---
+      - name: Setup Database
         run: |
-          cd wikijs
-          npm install --no-audit --no-fund --legacy-peer-deps
-
-      - name: Set Database ENV
-        run: |
-          # Trên macOS không có service container, 
-          # cần setup DB khác (VD: brew install hoặc remote DB)
-          # Ở đây chỉ set ENV giả định để minh họa
           if [ "${{ matrix.database }}" = "postgresql" ]; then
+            brew install postgresql@15
+            brew services start postgresql@15
+            sleep 10
+            createdb wiki
+            psql -d postgres -c "CREATE USER wikijs WITH PASSWORD 'wikijsrocks';"
+            psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
             echo "DB_TYPE=postgres" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
             echo "DB_PORT=5432" >> $GITHUB_ENV
@@ -166,6 +165,12 @@ jobs:
             echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
             echo "DB_NAME=wiki" >> $GITHUB_ENV
           elif [ "${{ matrix.database }}" = "mysql" ]; then
+            brew install mysql
+            brew services start mysql
+            sleep 10
+            mysql -uroot -e "CREATE DATABASE wiki;"
+            mysql -uroot -e "CREATE USER 'wikijs'@'localhost' IDENTIFIED BY 'wikijsrocks';"
+            mysql -uroot -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
             echo "DB_TYPE=mysql" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
             echo "DB_PORT=3306" >> $GITHUB_ENV
@@ -173,11 +178,20 @@ jobs:
             echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
             echo "DB_NAME=wiki" >> $GITHUB_ENV
           elif [ "${{ matrix.database }}" = "mongodb" ]; then
+            brew tap mongodb/brew
+            brew install mongodb-community@6.0
+            brew services start mongodb-community@6.0
+            sleep 10
             echo "DB_TYPE=mongodb" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
             echo "DB_PORT=27017" >> $GITHUB_ENV
             echo "DB_NAME=wiki" >> $GITHUB_ENV
           fi
+
+      - name: Install dependencies
+        run: |
+          cd wikijs
+          npm install --no-audit --no-fund --legacy-peer-deps
 
       - name: Build Wiki.js
         run: |
@@ -196,3 +210,4 @@ jobs:
         run: |
           cd wikijs
           curl -I http://localhost:3000 || (cat server.log && exit 1)
+
