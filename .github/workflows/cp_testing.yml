@@ -149,7 +149,7 @@ jobs:
           node-version: ${{ matrix.node }}
 
       # --- Cài và khởi động Database ---
-            - name: Setup Database
+      - name: Setup Database
         run: |
           if [ "${{ matrix.database }}" = "postgresql" ]; then
             brew install postgresql@15
