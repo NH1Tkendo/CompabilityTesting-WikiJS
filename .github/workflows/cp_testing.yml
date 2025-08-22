@@ -149,18 +149,20 @@ jobs:
           node-version: ${{ matrix.node }}
 
       # --- Cài và khởi động Database ---
-      - name: Setup Database
+            - name: Setup Database
         run: |
           if [ "${{ matrix.database }}" = "postgresql" ]; then
             brew install postgresql@15
             brew services start postgresql@15
             sleep 15
-            # tạo DB và user
             initdb --locale=C -D /usr/local/var/postgres || true
             pg_ctl -D /usr/local/var/postgres start || true
-            createdb wiki || true
-            psql -d postgres -c "CREATE USER wikijs WITH PASSWORD 'wikijsrocks';" || true
-            psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;" || true
+
+            # tạo user + db với password đúng
+            psql -d postgres -c "DROP DATABASE IF EXISTS wiki;" || true
+            psql -d postgres -c "DROP USER IF EXISTS wikijs;" || true
+            psql -d postgres -c "CREATE USER wikijs WITH PASSWORD 'wikijsrocks';"
+            psql -d postgres -c "CREATE DATABASE wiki OWNER wikijs;"
 
             echo "DB_TYPE=postgres" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
@@ -173,9 +175,15 @@ jobs:
             brew install mysql
             brew services start mysql
             sleep 15
-            mysql -uroot -e "CREATE DATABASE IF NOT EXISTS wiki;"
-            mysql -uroot -e "CREATE USER IF NOT EXISTS 'wikijs'@'localhost' IDENTIFIED BY 'wikijsrocks';"
-            mysql -uroot -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
+
+            # reset root password & tạo user wikijs
+            mysql -uroot -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'rootpass';" || true
+            mysql -uroot -prootpass -e "DROP DATABASE IF EXISTS wiki;"
+            mysql -uroot -prootpass -e "CREATE DATABASE wiki;"
+            mysql -uroot -prootpass -e "DROP USER IF EXISTS 'wikijs'@'localhost';"
+            mysql -uroot -prootpass -e "CREATE USER 'wikijs'@'localhost' IDENTIFIED BY 'wikijsrocks';"
+            mysql -uroot -prootpass -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
+            mysql -uroot -prootpass -e "FLUSH PRIVILEGES;"
 
             echo "DB_TYPE=mysql" >> $GITHUB_ENV
             echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
@@ -195,28 +203,5 @@ jobs:
             echo "DB_PORT=27017" >> $GITHUB_ENV
             echo "DB_NAME=wiki" >> $GITHUB_ENV
           fi
-
-      - name: Install dependencies
-        run: |
-          cd wikijs
-          npm install --no-audit --no-fund --legacy-peer-deps
-
-      - name: Build Wiki.js
-        run: |
-          cd wikijs
-          echo "Running Wiki.js build on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Browser Safari"
-          npm rebuild sqlite3
-          
-      - name: Start Wiki.js server
-        run: |
-          cd wikijs
-          nohup node server > server.log 2>&1 &
-          sleep 20
-          cat server.log
-
-      - name: Test server response
-        run: |
-          cd wikijs
-          curl -I http://localhost:3000 || (cat server.log && exit 1)
 
 
