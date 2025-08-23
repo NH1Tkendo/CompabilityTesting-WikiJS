@@ -21,6 +21,7 @@ jobs:
           path: mainrepo
 
       - name: Checkout Wiki.js source
+        working-directory: mainrepo
         run: |
           wget https://github.com/Requarks/wiki/releases/latest/download/wiki-js.tar.gz
           mkdir wikijs
