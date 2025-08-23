@@ -131,8 +131,10 @@ jobs:
           npx playwright install --with-deps
 
       - name: Run Playwright Tests
+        working-directory: mainrepo
         run: |
           ls -l
           npx playwright test --config=playwright.config.ts --project=${{ matrix.browser }}
+
 
 
