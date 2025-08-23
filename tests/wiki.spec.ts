@@ -7,6 +7,6 @@ test('Wiki.js homepage loads on Safari (WebKit)', async ({ page }) => {
 
 test('Can navigate to login page', async ({ page }) => {
   await page.goto('/');
-  await page.click('text=Login'); // nút Login
+  await page.getByRole('button', { name: 'Page Actions' }).click();
   await expect(page).toHaveURL(/\/login/);
 });
