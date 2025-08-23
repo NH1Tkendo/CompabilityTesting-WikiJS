@@ -1,4 +1,4 @@
-name: macOS + Safari + NodeJS + DB
+name: ${{ github.ref_name }}
 
 on:
   workflow_dispatch: {}
