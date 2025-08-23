@@ -1,4 +1,5 @@
-name: Test case - ${{ github.ref_name }}
+name: Compatibility testing
+run-name: ubuntu + browser + NodeJS + DB 
 
 on:
   workflow_dispatch:
