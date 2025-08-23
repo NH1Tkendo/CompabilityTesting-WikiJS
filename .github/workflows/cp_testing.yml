@@ -1,4 +1,4 @@
-name: Ubuntu + browser + NodeJS + DB
+name: ${{ github.ref_name }}
 
 on:
   workflow_dispatch: {}
