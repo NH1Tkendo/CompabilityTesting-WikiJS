@@ -84,7 +84,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        working-directory: mainrepo
+        working-directory: mainrepo/wikijs
         run: |
           npm install --no-audit --no-fund --legacy-peer-deps
 
