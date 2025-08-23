@@ -1,7 +1,10 @@
 name: macOS + Safari + NodeJS + DB
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - macOS
 
 jobs:
   test-safari:
