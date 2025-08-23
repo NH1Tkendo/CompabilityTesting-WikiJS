@@ -132,4 +132,5 @@ jobs:
 
       - name: Run Playwright Tests
         run: |
-          npx playwright test --project=${{ matrix.browser }}
+          npx playwright test --config=playwright.config.ts --project=${{ matrix.browser }}
+
