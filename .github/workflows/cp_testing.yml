@@ -124,3 +124,12 @@ jobs:
         run: |
           cd wikijs
           curl -I http://localhost:3000 || (cat server.log && exit 1)
+          
+      - name: Install Playwright
+        run: |
+          npm install -D @playwright/test
+          npx playwright install --with-deps
+
+      - name: Run Playwright Tests
+        run: |
+          npx playwright test --project=${{ matrix.browser }}
