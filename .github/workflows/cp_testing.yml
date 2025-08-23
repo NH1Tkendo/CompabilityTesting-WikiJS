@@ -1,4 +1,4 @@
-name: Wiki.js Compatibility Testing
+name: Ubuntu + browser + NodeJS + DB
 
 on:
   workflow_dispatch:
