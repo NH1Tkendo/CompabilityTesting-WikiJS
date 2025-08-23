@@ -1,11 +1,8 @@
-name: ${{ github.ref_name }}
+name: Test case - ${{ github.ref_name }}
 
 on:
-  workflow_dispatch: {}
-  push:
-    branches:
-      - macOS
-
+  workflow_dispatch: 
+  
 jobs:
   test-safari:
     runs-on: macos-latest
