@@ -104,12 +104,14 @@ jobs:
 
       - name: Start Wiki.js server
         working-directory: mainrepo/wikijs
+        shell: pwsh
         run: |
           echo "Starting Wiki.js server..."
-          New-Item -Path "server.log" -ItemType File -Force | Out-Null
-          Start-Process -NoNewWindow -FilePath "node" -ArgumentList "server" -RedirectStandardOutput "server.log" -RedirectStandardError "server.log"
-          Start-Sleep -Seconds 30
+          # Chạy server ở background
+          Start-Job { node server }
+          Start-Sleep -Seconds 25
           Get-Content server.log -Tail 50
+
 
       - name: Install Playwright
         working-directory: mainrepo
