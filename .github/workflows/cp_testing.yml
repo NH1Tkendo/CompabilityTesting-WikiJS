@@ -59,13 +59,20 @@ jobs:
           }
           elseif ("${{ matrix.database }}" -eq "postgresql") {
             choco install postgresql -y
-            Start-Service postgresql-x64-17 -ErrorAction SilentlyContinue
+          
+            # Đường dẫn bin của PostgreSQL
+            $pgBin = "C:\Program Files\PostgreSQL\17\bin"
+            $env:PATH += ";$pgBin"
+          
+            # Chờ dịch vụ khởi động
             Start-Sleep -Seconds 20
-
-            "C:\Program Files\PostgreSQL\17\bin\createdb.exe" -U postgres wiki
-            "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d postgres -c "CREATE ROLE wikijs WITH LOGIN PASSWORD 'wikijsrocks';"
-            "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
-
+          
+            # Tạo database và user
+            & "$pgBin\createdb.exe" -U postgres wiki
+            & "$pgBin\psql.exe" -U postgres -d postgres -c "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'wikijs') THEN CREATE ROLE wikijs WITH LOGIN PASSWORD 'wikijsrocks'; END IF; END $$;"
+            & "$pgBin\psql.exe" -U postgres -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
+          
+            # Xuất env cho Wiki.js
             echo "DB_TYPE=postgres" | Out-File -FilePath $env:GITHUB_ENV -Append
             echo "DB_HOST=127.0.0.1" | Out-File -FilePath $env:GITHUB_ENV -Append
             echo "DB_PORT=5432" | Out-File -FilePath $env:GITHUB_ENV -Append
