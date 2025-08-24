@@ -39,8 +39,9 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ matrix.database }}" -eq "mysql") {
-            choco install mysql --params "/port:3306 /installroot:C:\mysql" -y
-            Start-Service MySQL
+            choco install mysql -y
+            Start-Service MySQL80 -ErrorAction SilentlyContinue
+            Start-Service MySQL -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 20
 
             mysql -uroot -e "DROP DATABASE IF EXISTS wiki;"
@@ -58,12 +59,12 @@ jobs:
           }
           elseif ("${{ matrix.database }}" -eq "postgresql") {
             choco install postgresql -y
-            Start-Service postgresql
+            Start-Service postgresql-x64-17 -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 20
 
-            createdb wiki
-            psql -d postgres -c "CREATE ROLE wikijs WITH LOGIN PASSWORD 'wikijsrocks';"
-            psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
+            "C:\Program Files\PostgreSQL\17\bin\createdb.exe" -U postgres wiki
+            "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d postgres -c "CREATE ROLE wikijs WITH LOGIN PASSWORD 'wikijsrocks';"
+            "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U postgres -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
 
             echo "DB_TYPE=postgres" | Out-File -FilePath $env:GITHUB_ENV -Append
             echo "DB_HOST=127.0.0.1" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -74,7 +75,7 @@ jobs:
           }
           elseif ("${{ matrix.database }}" -eq "mongodb") {
             choco install mongodb -y
-            Start-Service mongodb
+            Start-Service MongoDB
             Start-Sleep -Seconds 20
 
             echo "DB_TYPE=mongodb" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -97,8 +98,10 @@ jobs:
       - name: Start Wiki.js server
         working-directory: mainrepo/wikijs
         run: |
-          Start-Process -NoNewWindow -FilePath "node" -ArgumentList "server"
-          Start-Sleep -Seconds 25
+          echo "Starting Wiki.js server..."
+          New-Item -Path "server.log" -ItemType File -Force | Out-Null
+          Start-Process -NoNewWindow -FilePath "node" -ArgumentList "server" -RedirectStandardOutput "server.log" -RedirectStandardError "server.log"
+          Start-Sleep -Seconds 30
           Get-Content server.log -Tail 50
 
       - name: Install Playwright
