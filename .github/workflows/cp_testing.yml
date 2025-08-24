@@ -1,4 +1,4 @@
-name: Compatibility testing (Windows + Chrome/Edge)
+name: Compatibility testing
 run-name: Windows + browser + NodeJS + DB
 
 on:
@@ -107,10 +107,11 @@ jobs:
         shell: pwsh
         run: |
           echo "Starting Wiki.js server..."
-          # Chạy server ở background
-          Start-Job { node server }
+          Start-Process -NoNewWindow -FilePath "node" -ArgumentList "server" `
+            -RedirectStandardOutput "server.log" -RedirectStandardError "server.log"
           Start-Sleep -Seconds 25
           Get-Content server.log -Tail 50
+
 
 
       - name: Install Playwright
