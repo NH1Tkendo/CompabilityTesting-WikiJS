@@ -5,119 +5,160 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-safari:
+  test:
     runs-on: macos-latest
+
     strategy:
       fail-fast: false
       matrix:
-        node: [14, 18, 20]
-        database: [postgresql, mysql, mongodb]
-        browser: [safari]
+        node_version: [14.x, 18.x, 20.x]
+        database_type: [mysql, postgresql, mongodb]
+        include:
+          - database_type: mysql
+            database_service: mysql
+            database_port: 3306
+            database_user: root
+            database_password: password
+            database_name: wikijs_test
+            database_url_prefix: mysql://root:password@localhost:3306/wikijs_test
+          - database_type: postgresql
+            database_service: postgres
+            database_port: 5432
+            database_user: postgres
+            database_password: password
+            database_name: wikijs_test
+            database_url_prefix: postgresql://postgres:password@localhost:5432/wikijs_test
+          - database_type: mongodb
+            database_service: mongo
+            database_port: 27017
+            database_user: ''
+            database_password: ''
+            database_name: wikijs_test
+            database_url_prefix: mongodb://localhost:27017/wikijs_test
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ matrix.database_password }}
+          MYSQL_DATABASE: ${{ matrix.database_name }}
+        ports:
+          - ${{ matrix.database_port }}:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: ${{ matrix.database_user }}
+          POSTGRES_PASSWORD: ${{ matrix.database_password }}
+          POSTGRES_DB: ${{ matrix.database_name }}
+        ports:
+          - ${{ matrix.database_port }}:5432
+        options: >-
+          --health-cmd="pg_isready -U ${{ matrix.database_user }} -d ${{ matrix.database_name }}"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      mongo:
+        image: mongo:4.4
+        ports:
+          - ${{ matrix.database_port }}:27017
+        options: >-
+          --health-cmd="mongo --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-        with:
-          path: mainrepo
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Checkout Wiki.js source
-        working-directory: mainrepo
-        run: |
-          wget https://github.com/Requarks/wiki/releases/latest/download/wiki-js.tar.gz
-          mkdir wikijs
-          tar xzf wiki-js.tar.gz -C ./wikijs
-          cd wikijs
-          mv config.sample.yml config.yml
+    - name: Setup Node.js ${{ matrix.node_version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node_version }}
 
-      - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
+    - name: Install Yarn
+      run: npm install -g yarn
 
-      # --- Setup Database ---
-      - name: Setup Database
-        run: |
-          if [ "${{ matrix.database }}" = "mysql" ]; then
-            brew install mysql
-            brew services start mysql
-            sleep 15
+    - name: Install Wiki.js dependencies
+      run: yarn install --frozen-lockfile
 
-            mysql -uroot -e "DROP DATABASE IF EXISTS wiki;"
-            mysql -uroot -e "CREATE DATABASE wiki;"
-            mysql -uroot -e "DROP USER IF EXISTS 'wikijs'@'localhost';"
-            mysql -uroot -e "CREATE USER 'wikijs'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'wikijsrocks';"
-            mysql -uroot -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
-            mysql -uroot -e "FLUSH PRIVILEGES;"
+    - name: Configure Wiki.js
+      env:
+        DB_TYPE: ${{ matrix.database_type }}
+        DB_HOST: localhost
+        DB_PORT: ${{ matrix.database_port }}
+        DB_USER: ${{ matrix.database_user }}
+        DB_PASS: ${{ matrix.database_password }}
+        DB_NAME: ${{ matrix.database_name }}
+      run: |
+        mkdir -p config
+        cat <<EOF > config/default.yml
+        db:
+          type: 
+            - 
+          host: 
+          port: 
+          user: 
+          pass: 
+          db: 
+        EOF
+        # For MongoDB, Wiki.js might expect a connection string directly
+        if [ "${{ matrix.database_type }}" == "mongodb" ]; then
+          sed -i '' 's|type: .*|type: mongodb|' config/default.yml
+          sed -i '' 's|host: .*|uri: ${{ matrix.database_url_prefix }}|' config/default.yml
+          sed -i '' '/port:/d' config/default.yml
+          sed -i '' '/user:/d' config/default.yml
+          sed -i '' '/pass:/d' config/default.yml
+          sed -i '' '/db:/d' config/default.yml
+        else
+          sed -i '' 's|type: .*|type: ${{ matrix.database_type }}|' config/default.yml
+          sed -i '' 's|host: .*|host: ${{ matrix.database_host }}|' config/default.yml
+          sed -i '' 's|port: .*|port: ${{ matrix.database_port }}|' config/default.yml
+          sed -i '' 's|user: .*|user: ${{ matrix.database_user }}|' config/default.yml
+          sed -i '' 's|pass: .*|pass: ${{ matrix.database_password }}|' config/default.yml
+          sed -i '' 's|db: .*|db: ${{ matrix.database_name }}|' config/default.yml
+        fi
 
-            echo "DB_TYPE=mysql" >> $GITHUB_ENV
-            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
-            echo "DB_PORT=3306" >> $GITHUB_ENV
-            echo "DB_USER=wikijs" >> $GITHUB_ENV
-            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
-            echo "DB_NAME=wiki" >> $GITHUB_ENV
+    - name: Run Wiki.js Migrations and Start Server
+      env:
+        NODE_ENV: production
+        WIKI_CONFIG: config/default.yml
+      run: |
+        # Ensure Wiki.js is built if necessary
+        # yarn build # Uncomment if Wiki.js requires a build step
+        
+        # Run Wiki.js setup/migration and start server
+        # Wiki.js v2 uses 'node server' to start and perform migrations if needed
+        # We need to run this in background and wait for it to be ready
+        node server & 
+        WIKI_PID=$!
+        echo "Wiki.js server started with PID $WIKI_PID."
+        
+        # Wait for Wiki.js to be ready on port 3000
+        timeout 120 bash -c 'until nc -z localhost 3000; do sleep 1; done'
+        if [ $? -ne 0 ]; then
+          echo "Wiki.js server did not start in time."
+          kill $WIKI_PID
+          exit 1
+        fi
+        echo "Wiki.js server is ready."
 
-          elif [ "${{ matrix.database }}" = "postgresql" ]; then
-            brew install postgresql
-            brew services start postgresql
-            sleep 15
+    - name: Install Playwright and WebKit
+      run: |
+        npm init playwright --yes
+        npx playwright install webkit
 
-            createdb wiki
-            psql -d postgres -c "DROP ROLE IF EXISTS wikijs;"
-            psql -d postgres -c "CREATE ROLE wikijs WITH LOGIN PASSWORD 'wikijsrocks';"
-            psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
+    - name: Run Playwright tests on Safari (WebKit)
+      run: npx playwright test --project=webkit
 
-            echo "DB_TYPE=postgres" >> $GITHUB_ENV
-            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
-            echo "DB_PORT=5432" >> $GITHUB_ENV
-            echo "DB_USER=wikijs" >> $GITHUB_ENV
-            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
-            echo "DB_NAME=wiki" >> $GITHUB_ENV
-
-          elif [ "${{ matrix.database }}" = "mongodb" ]; then
-            brew tap mongodb/brew
-            brew install mongodb-community@6.0
-            brew services start mongodb-community@6.0
-            sleep 15
-
-            echo "DB_TYPE=mongodb" >> $GITHUB_ENV
-            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
-            echo "DB_PORT=27017" >> $GITHUB_ENV
-            echo "DB_NAME=wiki" >> $GITHUB_ENV
-          fi
-
-      - name: Install dependencies
-        working-directory: mainrepo/wikijs
-        run: |
-          npm install --no-audit --no-fund --legacy-peer-deps
-
-      - name: Build Wiki.js
-        working-directory: mainrepo/wikijs
-        run: |
-          echo "Building Wiki.js on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Safari"
-          npm rebuild sqlite3
-
-      - name: Start Wiki.js server
-        working-directory: mainrepo/wikijs
-        env:
-          DB_TYPE: ${{ env.DB_TYPE }}
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_PORT: ${{ env.DB_PORT }}
-          DB_USER: ${{ env.DB_USER }}
-          DB_PASS: ${{ env.DB_PASS }}
-          DB_NAME: ${{ env.DB_NAME }}
-        run: |
-          nohup node server > server.log 2>&1 &
-          npx wait-on tcp:127.0.0.1:3000 --timeout 60000
-          cat server.log
-
-      - name: Install Playwright
-        working-directory: mainrepo
-        run: |
-          npm install -D @playwright/test
-          npx playwright install --with-deps
-
-      - name: Run Playwright Tests (Safari/WebKit)
-        working-directory: mainrepo
-        run: |
-          ls -l
-          npx playwright test --config=playwright.config.ts --project=webkit
+    - name: Upload Playwright Test Results (if any)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-results-${{ matrix.node_version }}-${{ matrix.database_type }}
+        path: test-results/
