@@ -5,84 +5,119 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Test (${{ matrix.os }} - Node ${{ matrix.node }} - DB ${{ matrix.db }})
-    runs-on: ${{ matrix.os }}
-
+  test-safari:
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest]  # Safari chỉ chạy được trên macOS
         node: [14, 18, 20]
-        db: [mysql, postgres, mongodb]
-
-    services:
-      mysql:
-        image: mysql:8
-        ports: [3306:3306]
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: wiki
-        options: >-
-          --health-cmd "mysqladmin ping -h localhost -proot"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          if: matrix.db == 'mysql'
-
-      postgres:
-        image: postgres:15
-        ports: [5432:5432]
-        env:
-          POSTGRES_USER: wiki
-          POSTGRES_PASSWORD: wiki
-          POSTGRES_DB: wiki
-        options: >-
-          --health-cmd "pg_isready -U wiki"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          if: matrix.db == 'postgres'
-
-      mongodb:
-        image: mongo:6
-        ports: [27017:27017]
-        options: >-
-          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          if: matrix.db == 'mongodb'
+        database: [postgresql, mysql, mongodb]
+        browser: [safari]
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          path: mainrepo
+
+      - name: Checkout Wiki.js source
+        working-directory: mainrepo
+        run: |
+          wget https://github.com/Requarks/wiki/releases/latest/download/wiki-js.tar.gz
+          mkdir wikijs
+          tar xzf wiki-js.tar.gz -C ./wikijs
+          cd wikijs
+          mv config.sample.yml config.yml
 
       - name: Setup Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
 
+      # --- Setup Database ---
+      - name: Setup Database
+        run: |
+          if [ "${{ matrix.database }}" = "mysql" ]; then
+            brew install mysql
+            brew services start mysql
+            sleep 15
+
+            mysql -uroot -e "DROP DATABASE IF EXISTS wiki;"
+            mysql -uroot -e "CREATE DATABASE wiki;"
+            mysql -uroot -e "DROP USER IF EXISTS 'wikijs'@'localhost';"
+            mysql -uroot -e "CREATE USER 'wikijs'@'localhost' IDENTIFIED WITH caching_sha2_password BY 'wikijsrocks';"
+            mysql -uroot -e "GRANT ALL PRIVILEGES ON wiki.* TO 'wikijs'@'localhost';"
+            mysql -uroot -e "FLUSH PRIVILEGES;"
+
+            echo "DB_TYPE=mysql" >> $GITHUB_ENV
+            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+            echo "DB_PORT=3306" >> $GITHUB_ENV
+            echo "DB_USER=wikijs" >> $GITHUB_ENV
+            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
+
+          elif [ "${{ matrix.database }}" = "postgresql" ]; then
+            brew install postgresql
+            brew services start postgresql
+            sleep 15
+
+            createdb wiki
+            psql -d postgres -c "DROP ROLE IF EXISTS wikijs;"
+            psql -d postgres -c "CREATE ROLE wikijs WITH LOGIN PASSWORD 'wikijsrocks';"
+            psql -d postgres -c "GRANT ALL PRIVILEGES ON DATABASE wiki TO wikijs;"
+
+            echo "DB_TYPE=postgres" >> $GITHUB_ENV
+            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+            echo "DB_PORT=5432" >> $GITHUB_ENV
+            echo "DB_USER=wikijs" >> $GITHUB_ENV
+            echo "DB_PASS=wikijsrocks" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
+
+          elif [ "${{ matrix.database }}" = "mongodb" ]; then
+            brew tap mongodb/brew
+            brew install mongodb-community@6.0
+            brew services start mongodb-community@6.0
+            sleep 15
+
+            echo "DB_TYPE=mongodb" >> $GITHUB_ENV
+            echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
+            echo "DB_PORT=27017" >> $GITHUB_ENV
+            echo "DB_NAME=wiki" >> $GITHUB_ENV
+          fi
+
       - name: Install dependencies
-        run: npm install
-
-      - name: Setup Playwright Browsers
-        run: npx playwright install --with-deps
-
-      - name: Run Wiki.js (background)
+        working-directory: mainrepo/wikijs
         run: |
-          NODE_ENV=development npm start &
-          sleep 20
+          npm install --no-audit --no-fund --legacy-peer-deps
 
-      - name: Run Playwright Safari test
+      - name: Build Wiki.js
+        working-directory: mainrepo/wikijs
         run: |
-          echo "import { test, expect } from '@playwright/test';
-          test('homepage should load in Safari', async ({ browser }) => {
-            const safari = await browser.newContext({ browserName: 'webkit' });
-            const page = await safari.newPage();
-            await page.goto('http://localhost:3000');
-            await expect(page).toHaveTitle(/Wiki/i);
-            await safari.close();
-          });" > basic.spec.ts
+          echo "Building Wiki.js on Node ${{ matrix.node }} with DB ${{ matrix.database }} and Safari"
+          npm rebuild sqlite3
 
-          npx playwright test basic.spec.ts --project=webkit
+      - name: Start Wiki.js server
+        working-directory: mainrepo/wikijs
+        env:
+          DB_TYPE: ${{ env.DB_TYPE }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASS: ${{ env.DB_PASS }}
+          DB_NAME: ${{ env.DB_NAME }}
+        run: |
+          nohup node server > server.log 2>&1 &
+          npx wait-on tcp:127.0.0.1:3000 --timeout 60000
+          cat server.log
+
+      - name: Install Playwright
+        working-directory: mainrepo
+        run: |
+          npm install -D @playwright/test
+          npx playwright install --with-deps
+
+      - name: Run Playwright Tests (Safari/WebKit)
+        working-directory: mainrepo
+        run: |
+          ls -l
+          npx playwright test --config=playwright.config.ts --project=webkit
