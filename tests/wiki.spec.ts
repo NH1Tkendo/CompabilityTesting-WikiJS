@@ -1,12 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('Wiki.js homepage loads on Safari (WebKit)', async ({ page }) => {
-  await page.goto('/');
-  await expect(page).toHaveTitle(/Wiki.js/i);
+test('basic Wiki.js page access', async ({ page }) => {
+  await page.goto('http://localhost:3000'); // Wiki.js default port
+  await expect(page).toHaveTitle(/Wiki.js/); // Check if the title contains "Wiki.js"
 });
-
-test('Can navigate to login page', async ({ page }) => {
-  await page.goto('/');
-  console.log(await page.content());  // In ra HTML hiện tại
-});
-
