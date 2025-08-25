@@ -6,159 +6,83 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest
+    name: Test (${{ matrix.os }} - Node ${{ matrix.node }} - DB ${{ matrix.db }})
+    runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
-        node_version: [14.x, 18.x, 20.x]
-        database_type: [mysql, postgresql, mongodb]
-        include:
-          - database_type: mysql
-            database_service: mysql
-            database_port: 3306
-            database_user: root
-            database_password: password
-            database_name: wikijs_test
-            database_url_prefix: mysql://root:password@localhost:3306/wikijs_test
-          - database_type: postgresql
-            database_service: postgres
-            database_port: 5432
-            database_user: postgres
-            database_password: password
-            database_name: wikijs_test
-            database_url_prefix: postgresql://postgres:password@localhost:5432/wikijs_test
-          - database_type: mongodb
-            database_service: mongo
-            database_port: 27017
-            database_user: ''
-            database_password: ''
-            database_name: wikijs_test
-            database_url_prefix: mongodb://localhost:27017/wikijs_test
+        os: [macos-latest]  # Safari chỉ chạy được trên macOS
+        node: [14, 18, 20]
+        db: [mysql, postgres, mongodb]
 
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8
+        ports: [3306:3306]
         env:
-          MYSQL_ROOT_PASSWORD: ${{ matrix.database_password }}
-          MYSQL_DATABASE: ${{ matrix.database_name }}
-        ports:
-          - ${{ matrix.database_port }}:3306
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: wiki
         options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd "mysqladmin ping -h localhost -proot"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          if: matrix.db == 'mysql'
+
       postgres:
-        image: postgres:13
+        image: postgres:15
+        ports: [5432:5432]
         env:
-          POSTGRES_USER: ${{ matrix.database_user }}
-          POSTGRES_PASSWORD: ${{ matrix.database_password }}
-          POSTGRES_DB: ${{ matrix.database_name }}
-        ports:
-          - ${{ matrix.database_port }}:5432
+          POSTGRES_USER: wiki
+          POSTGRES_PASSWORD: wiki
+          POSTGRES_DB: wiki
         options: >-
-          --health-cmd="pg_isready -U ${{ matrix.database_user }} -d ${{ matrix.database_name }}"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-      mongo:
-        image: mongo:4.4
-        ports:
-          - ${{ matrix.database_port }}:27017
+          --health-cmd "pg_isready -U wiki"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          if: matrix.db == 'postgres'
+
+      mongodb:
+        image: mongo:6
+        ports: [27017:27017]
         options: >-
-          --health-cmd="mongo --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          if: matrix.db == 'mongodb'
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js ${{ matrix.node_version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node_version }}
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
 
-    - name: Install Yarn
-      run: npm install -g yarn
+      - name: Install dependencies
+        run: npm install
 
-    - name: Install Wiki.js dependencies
-      run: yarn install --frozen-lockfile
+      - name: Setup Playwright Browsers
+        run: npx playwright install --with-deps
 
-    - name: Configure Wiki.js
-      env:
-        DB_TYPE: ${{ matrix.database_type }}
-        DB_HOST: localhost
-        DB_PORT: ${{ matrix.database_port }}
-        DB_USER: ${{ matrix.database_user }}
-        DB_PASS: ${{ matrix.database_password }}
-        DB_NAME: ${{ matrix.database_name }}
-      run: |
-        mkdir -p config
-        cat <<EOF > config/default.yml
-        db:
-          type: 
-            - 
-          host: 
-          port: 
-          user: 
-          pass: 
-          db: 
-        EOF
-        # For MongoDB, Wiki.js might expect a connection string directly
-        if [ "${{ matrix.database_type }}" == "mongodb" ]; then
-          sed -i '' 's|type: .*|type: mongodb|' config/default.yml
-          sed -i '' 's|host: .*|uri: ${{ matrix.database_url_prefix }}|' config/default.yml
-          sed -i '' '/port:/d' config/default.yml
-          sed -i '' '/user:/d' config/default.yml
-          sed -i '' '/pass:/d' config/default.yml
-          sed -i '' '/db:/d' config/default.yml
-        else
-          sed -i '' 's|type: .*|type: ${{ matrix.database_type }}|' config/default.yml
-          sed -i '' 's|host: .*|host: ${{ matrix.database_host }}|' config/default.yml
-          sed -i '' 's|port: .*|port: ${{ matrix.database_port }}|' config/default.yml
-          sed -i '' 's|user: .*|user: ${{ matrix.database_user }}|' config/default.yml
-          sed -i '' 's|pass: .*|pass: ${{ matrix.database_password }}|' config/default.yml
-          sed -i '' 's|db: .*|db: ${{ matrix.database_name }}|' config/default.yml
-        fi
+      - name: Run Wiki.js (background)
+        run: |
+          NODE_ENV=development npm start &
+          sleep 20
 
-    - name: Run Wiki.js Migrations and Start Server
-      env:
-        NODE_ENV: production
-        WIKI_CONFIG: config/default.yml
-      run: |
-        # Ensure Wiki.js is built if necessary
-        # yarn build # Uncomment if Wiki.js requires a build step
-        
-        # Run Wiki.js setup/migration and start server
-        # Wiki.js v2 uses 'node server' to start and perform migrations if needed
-        # We need to run this in background and wait for it to be ready
-        node server & 
-        WIKI_PID=$!
-        echo "Wiki.js server started with PID $WIKI_PID."
-        
-        # Wait for Wiki.js to be ready on port 3000
-        timeout 120 bash -c 'until nc -z localhost 3000; do sleep 1; done'
-        if [ $? -ne 0 ]; then
-          echo "Wiki.js server did not start in time."
-          kill $WIKI_PID
-          exit 1
-        fi
-        echo "Wiki.js server is ready."
+      - name: Run Playwright Safari test
+        run: |
+          echo "import { test, expect } from '@playwright/test';
+          test('homepage should load in Safari', async ({ browser }) => {
+            const safari = await browser.newContext({ browserName: 'webkit' });
+            const page = await safari.newPage();
+            await page.goto('http://localhost:3000');
+            await expect(page).toHaveTitle(/Wiki/i);
+            await safari.close();
+          });" > basic.spec.ts
 
-    - name: Install Playwright and WebKit
-      run: |
-        npm init playwright --yes
-        npx playwright install webkit
-
-    - name: Run Playwright tests on Safari (WebKit)
-      run: npx playwright test --project=webkit
-
-    - name: Upload Playwright Test Results (if any)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: playwright-results-${{ matrix.node_version }}-${{ matrix.database_type }}
-        path: test-results/
+          npx playwright test basic.spec.ts --project=webkit
